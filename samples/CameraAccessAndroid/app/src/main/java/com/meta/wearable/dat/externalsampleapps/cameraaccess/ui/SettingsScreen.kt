@@ -51,7 +51,7 @@ import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewaySta
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.IntelligenceEngine
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 
-private enum class SettingsSubScreen { CONNECTED_APPS, RECENT_TASKS, GATEWAY }
+private enum class SettingsSubScreen { CONNECTED_APPS, RECENT_TASKS, GATEWAY, GEMINI }
 
 @Composable
 fun SettingsScreen(
@@ -64,6 +64,7 @@ fun SettingsScreen(
         SettingsSubScreen.CONNECTED_APPS -> ConnectedAppsScreen(onBack = { subScreen = null })
         SettingsSubScreen.RECENT_TASKS -> RecentTasksScreen(onBack = { subScreen = null })
         SettingsSubScreen.GATEWAY -> GatewaySettingsScreen(onBack = { subScreen = null })
+        SettingsSubScreen.GEMINI -> GeminiSettingsScreen(onBack = { subScreen = null })
         null -> SettingsMainScreen(
             onBack = onBack,
             onOpen = { subScreen = it },
@@ -143,7 +144,7 @@ private fun SettingsMainScreen(
                         selected = engine == intelligenceEngine,
                         onClick = {
                             intelligenceEngine = engine
-                            SettingsManager.intelligenceEngine = engine
+                            SettingsManager.setIntelligenceEngine(engine)
                         },
                         shape = SegmentedButtonDefaults.itemShape(
                             index = index,
@@ -193,6 +194,9 @@ private fun SettingsMainScreen(
             // surfacing them as primary fields made a configured setup look
             // like one awaiting setup.
             NavigationRow("Gateway settings") { onOpen(SettingsSubScreen.GATEWAY) }
+            if (intelligenceEngine == IntelligenceEngine.GEMINI) {
+                NavigationRow("Gemini settings") { onOpen(SettingsSubScreen.GEMINI) }
+            }
 
             // Reset
             TextButton(onClick = { showResetDialog = true }) {
@@ -355,6 +359,70 @@ private fun GatewaySettingsScreen(
                 placeholder = "wss://your-server.example.com",
                 keyboardType = KeyboardType.Uri,
             )
+
+            Spacer(modifier = Modifier.height(32.dp))
+        }
+    }
+}
+
+/** API key + system prompt for the direct Gemini Live path. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GeminiSettingsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var apiKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
+    var systemPrompt by remember { mutableStateOf(SettingsManager.geminiSystemPrompt) }
+
+    fun saveAndClose() {
+        SettingsManager.geminiAPIKey = apiKey.trim()
+        SettingsManager.geminiSystemPrompt = systemPrompt.trim()
+        onBack()
+    }
+
+    BackHandler { saveAndClose() }
+
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = { Text("Gemini settings") },
+            navigationIcon = {
+                IconButton(onClick = { saveAndClose() }) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp)
+                .navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            SectionHeader("API key")
+            MonoTextField(
+                value = apiKey,
+                onValueChange = { apiKey = it },
+                label = "Gemini API key",
+                placeholder = "AIza... or AQ...",
+            )
+            FooterText(
+                "From aistudio.google.com/apikey. Stored on this phone and sent " +
+                    "only to Google when a call starts -- it does not pass through " +
+                    "the gateway.",
+            )
+
+            SectionHeader("System prompt")
+            OutlinedTextField(
+                value = systemPrompt,
+                onValueChange = { systemPrompt = it },
+                modifier = Modifier.fillMaxWidth().height(180.dp),
+                label = { Text("System prompt") },
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            )
+            FooterText("Applies to the next call.")
 
             Spacer(modifier = Modifier.height(32.dp))
         }

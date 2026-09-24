@@ -33,6 +33,7 @@ import com.meta.wearable.dat.camera.types.VideoFrame
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.DeviceSelector
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini.GeminiSessionViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.phone.PhoneCameraManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.webrtc.WebRTCSessionViewModel
@@ -69,6 +70,9 @@ class StreamViewModel(
 
   // VisionClaw additions
   var webrtcViewModel: WebRTCSessionViewModel? = null
+
+  /** Set by StreamScreen when the direct Gemini path is the active engine. */
+  var geminiViewModel: GeminiSessionViewModel? = null
   private var phoneCameraManager: PhoneCameraManager? = null
 
   fun startStream() {
@@ -111,6 +115,7 @@ class StreamViewModel(
       _uiState.update { it.copy(videoFrame = bitmap) }
       // Forward to WebRTC (every frame)
       webrtcViewModel?.pushVideoFrame(bitmap)
+      geminiViewModel?.sendVideoFrameIfThrottled(bitmap)
     }
 
     _uiState.update {
@@ -236,6 +241,8 @@ class StreamViewModel(
 
     // Forward to WebRTC (every frame)
     webrtcViewModel?.pushVideoFrame(bitmap)
+    // Gemini takes fewer of them; the budget lives inside the VM.
+    geminiViewModel?.sendVideoFrameIfThrottled(bitmap)
   }
 
   // Convert I420 (YYYYYYYY:UUVV) to NV21 (YYYYYYYY:VUVU)

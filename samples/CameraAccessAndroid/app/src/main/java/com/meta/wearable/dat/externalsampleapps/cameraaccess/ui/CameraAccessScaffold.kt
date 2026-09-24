@@ -53,6 +53,7 @@ import com.meta.wearable.dat.core.types.Permission
 import com.meta.wearable.dat.core.types.PermissionStatus
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.livekit.LiveKitSessionViewModel
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.IntelligenceEngine
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.wearables.WearablesViewModel
 
@@ -65,6 +66,7 @@ fun CameraAccessScaffold(
 ) {
   val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val captureSource by SettingsManager.captureSourceFlow.collectAsStateWithLifecycle()
+  val intelligenceEngine by SettingsManager.intelligenceEngineFlow.collectAsStateWithLifecycle()
   val liveKitViewModel: LiveKitSessionViewModel = composeViewModel()
   val snackbarHostState = remember { SnackbarHostState() }
   // Builds ship without a gateway token (it is per-person identity), so an
@@ -94,9 +96,15 @@ fun CameraAccessScaffold(
   // source is chosen at track creation) and the next screen auto-starts with
   // the new source.
   var previousSource by remember { mutableStateOf<CaptureSource?>(null) }
-  LaunchedEffect(captureSource) {
+  LaunchedEffect(captureSource, intelligenceEngine) {
     if (previousSource != null && previousSource != captureSource) {
       liveKitViewModel.leave()
+    }
+    // Engine switch replaces the call screen itself, so an open call has to
+    // end rather than linger behind the new one.
+    if (previousEngine != null && previousEngine != intelligenceEngine) {
+      liveKitViewModel.leave()
+      viewModel.navigateToDeviceSelection()
     }
     when (captureSource) {
       CaptureSource.GLASSES ->
@@ -109,6 +117,7 @@ fun CameraAccessScaffold(
           }
     }
     previousSource = captureSource
+    previousEngine = intelligenceEngine
   }
 
   // Glasses mode never shows a start-choice page: entering it with registered
@@ -116,6 +125,7 @@ fun CameraAccessScaffold(
   // the call screen's "Waiting for glasses video" placeholder is the loading
   // state. One attempt per entry into glasses mode, so a denied permission
   // surfaces once through the snackbar instead of looping.
+  var previousEngine by remember { mutableStateOf<IntelligenceEngine?>(null) }
   var glassesStartAttempted by remember { mutableStateOf(false) }
   var previousDeviceAvailable by remember { mutableStateOf(false) }
   LaunchedEffect(captureSource, uiState.isRegistered, uiState.hasActiveDevice) {
@@ -144,10 +154,18 @@ fun CameraAccessScaffold(
             )
         // Phone mode is the app's front door: no onboarding, no intermediate
         // screen -- the camera preview + call button IS the home screen.
+        // The engine picks which call that button starts: the hosted LiveKit
+        // agent, or Gemini Live straight from the phone.
         captureSource == CaptureSource.PHONE ->
-            LiveKitStreamScreen(
-                onOpenSettings = { viewModel.showSettings() },
-            )
+            if (intelligenceEngine == IntelligenceEngine.GEMINI) {
+                StreamScreen(
+                    isPhoneMode = true,
+                )
+            } else {
+                LiveKitStreamScreen(
+                    onOpenSettings = { viewModel.showSettings() },
+                )
+            }
         // Glasses mode with registered glasses: the SAME call screen, with
         // glasses frames as the video source, is the root -- streaming
         // auto-starts, so there is no start-choice interstitial.

@@ -127,9 +127,33 @@ object SettingsManager {
         get() = IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null))
         set(value) = prefs.edit().putString("intelligenceEngine", value.value).apply()
 
+    // The scaffold observes this to swap call screens live when the engine
+    // changes, the way captureSourceFlow swaps capture pipelines.
+    private val _intelligenceEngineFlow =
+        MutableStateFlow(IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null)))
+    val intelligenceEngineFlow: StateFlow<IntelligenceEngine> = _intelligenceEngineFlow.asStateFlow()
+
+    /** Keeps [intelligenceEngineFlow] in step with the stored preference. */
+    fun setIntelligenceEngine(engine: IntelligenceEngine) {
+        intelligenceEngine = engine
+        _intelligenceEngineFlow.value = engine
+    }
+
     var showCaptions: Boolean
         get() = prefs.getBoolean("showCaptions", true)
         set(value) = prefs.edit().putBoolean("showCaptions", value).apply()
+
+    // Direct Gemini Live path. The key stays on the device and is sent only to
+    // Google over the websocket (GeminiConfig.websocketURL); the default below
+    // is the placeholder upstream ships, so an unset key reads as "not
+    // configured" rather than as a bad key.
+    var geminiAPIKey: String
+        get() = prefs.getString("geminiAPIKey", null) ?: DEFAULT_GEMINI_API_KEY
+        set(value) = prefs.edit().putString("geminiAPIKey", value).apply()
+
+    var geminiSystemPrompt: String
+        get() = prefs.getString("geminiSystemPrompt", null) ?: DEFAULT_SYSTEM_PROMPT
+        set(value) = prefs.edit().putString("geminiSystemPrompt", value).apply()
 
     var webrtcSignalingURL: String
         get() = prefs.getString("webrtcSignalingURL", null) ?: DEFAULT_SIGNALING_URL
@@ -138,6 +162,15 @@ object SettingsManager {
     fun resetAll() {
         prefs.edit().clear().apply()
         _captureSourceFlow.value = CaptureSource.PHONE
+        _intelligenceEngineFlow.value = IntelligenceEngine.fromValue(null)
         refreshUnlocked()
     }
+
+    const val DEFAULT_GEMINI_API_KEY = "YOUR_GEMINI_API_KEY"
+
+    /** Voice-only assistant: it sees through the camera and answers out loud,
+     *  with no tools and nothing persistent behind it. */
+    const val DEFAULT_SYSTEM_PROMPT = """You are a voice assistant for someone wearing Meta Ray-Ban smart glasses. You see through their camera and speak with them. Keep replies short and natural -- a sentence or two, spoken language rather than written.
+
+You have no tools, no memory and no way to act on anything: you cannot send messages, search the web, set reminders or keep lists. If the person asks for something like that, say plainly that you cannot do it and suggest they ask their assistant on the phone instead. Never pretend you did something you cannot do."""
 }
