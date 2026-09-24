@@ -38,8 +38,9 @@ dependencyResolutionManagement {
   repositories {
     google()
     mavenCentral()
-    // The three Meta AARs are vendored into app/libs/repo as a flat local
-    // repository: CI and local builds never reach GitHub Packages.
+    // The three com.meta.wearable:mwdat-* artifacts are vendored into
+    // app/libs in standard Maven layout, so neither CI nor a local build
+    // needs GitHub Packages credentials for the private Meta registry.
     maven {
       url = uri(rootDir.toPath() / "app" / "libs")
     }
