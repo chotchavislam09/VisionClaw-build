@@ -19,8 +19,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # The ubuntu-latest image already ships the Android SDK, platform 35
+      # and build-tools. android-actions/setup-android tries to install the
+      # retired 'tools' package and fails, so it is deliberately omitted.
 
       - name: Make gradlew executable
         working-directory: samples/CameraAccessAndroid
