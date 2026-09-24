@@ -38,12 +38,10 @@ dependencyResolutionManagement {
   repositories {
     google()
     mavenCentral()
+    // The three Meta AARs are vendored into app/libs/repo as a flat local
+    // repository: CI and local builds never reach GitHub Packages.
     maven {
-      url = uri("https://maven.pkg.github.com/facebook/meta-wearables-dat-android")
-      credentials {
-        username = "" // not needed
-        password = System.getenv("GITHUB_TOKEN") ?: localProperties.getProperty("github_token")
-      }
+      url = uri(rootDir.toPath() / "app" / "libs")
     }
     // LiveKit's audioswitch fork is published on JitPack only.
     maven {

@@ -1,0 +1,42 @@
+name: Build debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'samples/CameraAccessAndroid/**'
+      - '.github/workflows/android-debug-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Make gradlew executable
+        working-directory: samples/CameraAccessAndroid
+        run: chmod +x gradlew
+
+      - name: Assemble debug APK
+        working-directory: samples/CameraAccessAndroid
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Show outputs
+        working-directory: samples/CameraAccessAndroid
+        run: find app/build/outputs -name '*.apk' -print
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CameraAccessAndroid-debug
+          path: samples/CameraAccessAndroid/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
