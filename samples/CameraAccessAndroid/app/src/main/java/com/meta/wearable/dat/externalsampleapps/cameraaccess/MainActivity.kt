@@ -11,6 +11,7 @@ package com.meta.wearable.dat.externalsampleapps.cameraaccess
 import android.Manifest.permission.BLUETOOTH_CONNECT
 import android.Manifest.permission.CAMERA
 import android.Manifest.permission.RECORD_AUDIO
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -126,6 +127,14 @@ class MainActivity : ComponentActivity() {
   }
 
   fun checkPermissions(onGranted: () -> Unit) {
+    // Only the very first launch needs the dialog. Afterwards the grants are
+    // already held, and asking again on the startup path meant setContent ran
+    // behind a dialog the user had to dismiss -- so a cold start looked like it
+    // hung on a blank window until the system prompt was answered.
+    if (PERMISSIONS.all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }) {
+      onGranted()
+      return
+    }
     onPermissionsGranted = onGranted
     permissionsRequestLauncher.launch(PERMISSIONS)
   }

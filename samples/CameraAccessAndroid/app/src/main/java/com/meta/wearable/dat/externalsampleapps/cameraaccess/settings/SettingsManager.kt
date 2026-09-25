@@ -58,6 +58,8 @@ object SettingsManager {
     fun init(context: Context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         _captureSourceFlow.value = CaptureSource.fromValue(prefs.getString("captureSource", null))
+        _intelligenceEngineFlow.value =
+            IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null))
         refreshUnlocked()
     }
 
@@ -126,8 +128,11 @@ object SettingsManager {
 
     // The scaffold observes this to swap call screens live when the engine
     // changes, the way captureSourceFlow swaps capture pipelines.
+    // Seeded with a constant, never with prefs: this initializer can run before
+    // init() has assigned the lateinit `prefs`, and a read there killed the app
+    // on its first frame. init() fills in the stored value.
     private val _intelligenceEngineFlow =
-        MutableStateFlow(IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null)))
+        MutableStateFlow(IntelligenceEngine.OPENAI)
     val intelligenceEngineFlow: StateFlow<IntelligenceEngine> = _intelligenceEngineFlow.asStateFlow()
 
     // Kotlin generates a setIntelligenceEngine(IntelligenceEngine) bridge for the

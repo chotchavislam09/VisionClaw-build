@@ -75,11 +75,11 @@ fun AccessCodeScreen(
 
     // Google sign-in
     var nonce by remember { mutableStateOf<String?>(null) }
-    var pendingEmail by remember {
-        mutableStateOf(
-            if (SettingsManager.accountStatus == "pending") SettingsManager.accountEmail else null,
-        )
-    }
+    // Seeded as null and filled from a side effect rather than during
+    // composition: this screen composes inside setContent, which can run before
+    // SettingsManager.init() has assigned its lateinit prefs, and the reads
+    // below would then throw on the first frame.
+    var pendingEmail by remember { mutableStateOf<String?>(null) }
     // Bumped on resume so a poll fires the instant the browser hands control back.
     var resumeTick by remember { mutableIntStateOf(0) }
 
@@ -88,10 +88,19 @@ fun AccessCodeScreen(
     // empty; the token is per-person) has no account to sign in to, so the
     // access-code field is the front door and Google sign-in stays behind
     // the disclosure.
-    var showManual by remember { mutableStateOf(!SettingsManager.isGatewayConfigured) }
+    var showManual by remember { mutableStateOf(false) }
     var code by remember { mutableStateOf("") }
     var ownGateway by remember { mutableStateOf(false) }
-    var gatewayUrl by remember { mutableStateOf(SettingsManager.gatewayBaseUrl) }
+    var gatewayUrl by remember { mutableStateOf("") }
+
+    // Settings are read once, after composition, so no part of the first frame
+    // depends on prefs having been initialized.
+    LaunchedEffect(Unit) {
+        val pending = SettingsManager.accountStatus == "pending"
+        pendingEmail = if (pending) SettingsManager.accountEmail else null
+        showManual = !SettingsManager.isGatewayConfigured
+        gatewayUrl = SettingsManager.gatewayBaseUrl
+    }
 
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
