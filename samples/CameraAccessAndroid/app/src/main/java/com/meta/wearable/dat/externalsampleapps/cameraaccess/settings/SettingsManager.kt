@@ -123,9 +123,6 @@ object SettingsManager {
             gatewayToken.isNotEmpty() &&
             !gatewayToken.startsWith("YOUR_")
 
-    var intelligenceEngine: IntelligenceEngine
-        get() = IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null))
-        set(value) = prefs.edit().putString("intelligenceEngine", value.value).apply()
 
     // The scaffold observes this to swap call screens live when the engine
     // changes, the way captureSourceFlow swaps capture pipelines.
@@ -133,9 +130,14 @@ object SettingsManager {
         MutableStateFlow(IntelligenceEngine.fromValue(prefs.getString("intelligenceEngine", null)))
     val intelligenceEngineFlow: StateFlow<IntelligenceEngine> = _intelligenceEngineFlow.asStateFlow()
 
-    /** Keeps [intelligenceEngineFlow] in step with the stored preference. */
+    // Kotlin generates a setIntelligenceEngine(IntelligenceEngine) bridge for the
+    // property setter, so a setter function of the same shape clashes on the JVM.
+    // The flow holder is the single owner of the value instead.
+    val intelligenceEngine: IntelligenceEngine
+        get() = _intelligenceEngineFlow.value
+
     fun setIntelligenceEngine(engine: IntelligenceEngine) {
-        intelligenceEngine = engine
+        prefs.edit().putString("intelligenceEngine", engine.value).apply()
         _intelligenceEngineFlow.value = engine
     }
 
