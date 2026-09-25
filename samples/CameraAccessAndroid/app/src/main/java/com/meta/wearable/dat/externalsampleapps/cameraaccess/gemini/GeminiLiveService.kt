@@ -64,6 +64,17 @@ class GeminiLiveService {
     private var connectCallback: ((Boolean) -> Unit)? = null
     private var timeoutTimer: Timer? = null
 
+    /**
+     * When a pong last arrived. OkHttp pings every 10s below, and the server
+     * answers by protocol; a connection that has gone dead in the mobile
+     * network -- the classic half-open socket -- keeps the send side happy and
+     * simply stops answering. Without this the app learns nothing until the
+     * 15s timeout, which reports the same sentence for a dead socket and for a
+     * server that is merely slow to the setup frame.
+     */
+    @Volatile
+    private var lastPongAt: Long = 0
+
     private val client = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(10, TimeUnit.SECONDS)
@@ -105,9 +116,24 @@ class GeminiLiveService {
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened")
+                lastPongAt = System.currentTimeMillis()
                 _connectionState.value = GeminiConnectionState.SettingUp
                 _progress.value = "Socket open. Sent session setup; waiting for reply..."
                 sendSetupMessage()
+            }
+
+            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
+                // Binary frames are the Live API's native shape. Reading them
+                // through the String overload would leave any frame that came
+                // in binary as a silent no-op, which is indistinguishable on a
+                // device from the server not answering at all.
+                handleMessage(bytes.utf8())
+            }
+
+            // OkHttp routes a pong here. On a mobile network this is often the
+            // only evidence that the socket is still alive.
+            override fun onPong(webSocket: WebSocket, payload: okio.ByteString) {
+                lastPongAt = System.currentTimeMillis()
             }
 
             // The Live API answers on binary frames and OkHttp delivers those
@@ -181,7 +207,18 @@ class GeminiLiveService {
                         // that is the whole point: the setup reply is the one
                         // message whose absence has to be visible.
                         val stage = _progress.value.ifEmpty { "no stage recorded" }
-                        val msg = "Connection timed out ($stage)"
+                        // A socket that stopped answering pings is dead, and
+                        // that is a different fault from a server that is up
+                        // but silent on the setup frame -- different enough
+                        // that guessing between them has cost several builds.
+                        val pongAge = System.currentTimeMillis() - lastPongAt
+                        val dead = lastPongAt > 0 && pongAge > 25000
+                        val msg = if (dead) {
+                            "Socket is dead: no pong for ${pongAge / 1000}s, so the " +
+                                "connection silently dropped ($stage)"
+                        } else {
+                            "Connection timed out ($stage)"
+                        }
                         Log.e(TAG, msg)
                         _progress.value = ""
                         _connectionState.value = GeminiConnectionState.Error(msg)
