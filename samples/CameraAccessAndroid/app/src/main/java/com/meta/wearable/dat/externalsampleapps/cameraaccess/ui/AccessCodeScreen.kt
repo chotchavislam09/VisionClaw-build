@@ -84,7 +84,11 @@ fun AccessCodeScreen(
     var resumeTick by remember { mutableIntStateOf(0) }
 
     // Access code path
-    var showManual by remember { mutableStateOf(false) }
+    // A build that ships without a gateway token (Secrets.gatewayToken is
+    // empty; the token is per-person) has no account to sign in to, so the
+    // access-code field is the front door and Google sign-in stays behind
+    // the disclosure.
+    var showManual by remember { mutableStateOf(!SettingsManager.isGatewayConfigured) }
     var code by remember { mutableStateOf("") }
     var ownGateway by remember { mutableStateOf(false) }
     var gatewayUrl by remember { mutableStateOf(SettingsManager.gatewayBaseUrl) }

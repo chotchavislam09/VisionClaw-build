@@ -16,6 +16,7 @@ import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions
 import androidx.activity.viewModels
 import androidx.lifecycle.ViewModelProvider
@@ -47,12 +48,41 @@ class MainActivity : ComponentActivity() {
 
   private var permissionContinuation: CancellableContinuation<PermissionStatus>? = null
   private val permissionMutex = Mutex()
+
+  // Both launchers are registered as properties precisely so registration
+  // happens during Activity construction. Registering from onCreate -- which
+  // is what this used to do for the permission list -- throws
+  // "LifecycleOwner is attempting to register while current state is RESUMED"
+  // on the first launch, once the runtime dialog has already moved the
+  // Activity past STARTED. Later launches skip that branch and look fine.
   private val permissionsResultLauncher =
       registerForActivityResult(Wearables.RequestPermissionContract()) { result ->
         val permissionStatus = result.getOrDefault(PermissionStatus.Denied)
         permissionContinuation?.resume(permissionStatus)
         permissionContinuation = null
       }
+
+  private val permissionsRequestLauncher =
+      registerForActivityResult(RequestMultiplePermissions()) { permissionsResult ->
+        // Only the current mode's needs gate startup: phone calls need camera
+        // + mic; the Bluetooth grant matters only for glasses.
+        val needed =
+            if (SettingsManager.captureSource == CaptureSource.GLASSES) {
+              listOf(CAMERA, RECORD_AUDIO, BLUETOOTH_CONNECT)
+            } else {
+              listOf(CAMERA, RECORD_AUDIO)
+            }
+        val missing = needed.filter { permissionsResult[it] == false }
+        if (missing.isEmpty()) {
+          onPermissionsGranted()
+        } else {
+          viewModel.setRecentError(
+              "Missing permissions: " + missing.joinToString { it.substringAfterLast('.') }
+          )
+        }
+      }
+
+  private var onPermissionsGranted: () -> Unit = {}
 
   suspend fun requestWearablesPermission(permission: Permission): PermissionStatus {
     return permissionMutex.withLock {
@@ -96,25 +126,8 @@ class MainActivity : ComponentActivity() {
     }
   }
 
-  fun checkPermissions(onPermissionsGranted: () -> Unit) {
-    registerForActivityResult(RequestMultiplePermissions()) { permissionsResult ->
-          // Only the current mode's needs gate startup: phone calls need
-          // camera + mic; the Bluetooth grant matters only for glasses.
-          val needed =
-              if (SettingsManager.captureSource == CaptureSource.GLASSES) {
-                listOf(CAMERA, RECORD_AUDIO, BLUETOOTH_CONNECT)
-              } else {
-                listOf(CAMERA, RECORD_AUDIO)
-              }
-          val missing = needed.filter { permissionsResult[it] == false }
-          if (missing.isEmpty()) {
-            onPermissionsGranted()
-          } else {
-            viewModel.setRecentError(
-                "Missing permissions: " + missing.joinToString { it.substringAfterLast('.') }
-            )
-          }
-        }
-        .launch(PERMISSIONS)
+  fun checkPermissions(onGranted: () -> Unit) {
+    onPermissionsGranted = onGranted
+    permissionsRequestLauncher.launch(PERMISSIONS)
   }
 }
