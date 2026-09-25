@@ -78,13 +78,9 @@ class GeminiLiveService {
                 sendSetupMessage()
             }
 
-            override fun onMessage(webSocket: WebSocket, text: String) {
-                handleMessage(text)
-            }
-
-            // The Live API always answers with binary frames, and OkHttp hands
-            // those to onMessage(String) already decoded, so the text path below
-            // is the one that runs.
+            // The Live API answers on binary frames and OkHttp delivers those
+            // through onMessage(String) already decoded, so this one overload
+            // covers both directions.
             override fun onMessage(webSocket: WebSocket, text: String) {
                 handleMessage(text)
             }
@@ -150,7 +146,7 @@ class GeminiLiveService {
                     })
                 })
             }
-            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
+            webSocket?.send(json.toString())
         }
     }
 
@@ -168,7 +164,7 @@ class GeminiLiveService {
                     })
                 })
             }
-            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
+            webSocket?.send(json.toString())
         }
     }
 
@@ -185,7 +181,7 @@ class GeminiLiveService {
                     }))
                 })
             }
-            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
+            webSocket?.send(json.toString())
         }
     }
 
@@ -237,7 +233,7 @@ class GeminiLiveService {
             })
         }
         // Send directly (not via sendExecutor) to ensure it's the first message
-        webSocket?.send(setup.toString().toByteArray(Charsets.UTF_8))
+        webSocket?.send(setup.toString())
     }
 
     private fun handleMessage(text: String) {
