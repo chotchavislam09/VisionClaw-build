@@ -175,12 +175,18 @@ class GeminiLiveService {
                         // timeout before the socket opened is a transport
                         // problem, one after is the server sitting silent on
                         // the setup frame.
+                        //
+                        // The stage may hold the server's own words by now --
+                        // an unrecognised frame is put there verbatim -- and
+                        // that is the whole point: the setup reply is the one
+                        // message whose absence has to be visible.
                         val stage = _progress.value.ifEmpty { "no stage recorded" }
                         val msg = "Connection timed out ($stage)"
                         Log.e(TAG, msg)
                         _progress.value = ""
                         _connectionState.value = GeminiConnectionState.Error(msg)
                         resolveConnect(false)
+                        return
                     }
                 }
             }, 15000)
@@ -420,9 +426,16 @@ class GeminiLiveService {
             // Anything else: log it rather than let it disappear. A field the
             // client does not know (a new server message, a rejected frame) is
             // otherwise invisible, and "the app did nothing" is unfixable.
+            //
+            // It also goes on screen now. Logcat is unreachable without adb, so
+            // an unrecognised frame on a device reads exactly like the server
+            // saying nothing at all -- and when the frame is the server's answer
+            // to the setup message, that is the one thing worth reading.
             Log.d(TAG, "Unhandled frame: ${text.take(500)}")
+            _progress.value = "Server sent: ${text.take(300)}"
         } catch (e: Exception) {
             Log.e(TAG, "Error parsing message: ${e.message}: ${text.take(500)}")
+            _progress.value = "Unreadable server reply: ${text.take(200)}"
         }
     }
 }

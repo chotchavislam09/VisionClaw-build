@@ -95,9 +95,17 @@ class GeminiSessionViewModel : ViewModel() {
         geminiService.onDisconnected = { reason ->
             if (_uiState.value.isGeminiActive) {
                 stopSession()
-                _uiState.value = _uiState.value.copy(
-                    errorMessage = "Connection lost: ${reason ?: "Unknown error"}"
-                )
+                // Only once the connection is up. Before that every close is
+                // already reported by the connect callback, which has Google's
+                // own message -- and this branch fires right behind it with a
+                // vaguer sentence, so the informative one is the one the user
+                // never sees. Gating on Ready means it survives to the screen
+                // exactly when nothing else will describe it.
+                if (geminiService.connectionState.value is GeminiConnectionState.Ready) {
+                    _uiState.value = _uiState.value.copy(
+                        errorMessage = "Connection lost: ${reason ?: "Unknown error"}"
+                    )
+                }
             }
         }
 
