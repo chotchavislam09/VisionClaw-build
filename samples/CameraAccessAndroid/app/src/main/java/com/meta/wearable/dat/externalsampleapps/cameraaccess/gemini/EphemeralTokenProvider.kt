@@ -46,20 +46,21 @@ object EphemeralTokenProvider {
         val newSessionExpire = isoUtc(now + NEW_SESSION_WINDOW_MINUTES * 60_000)
         val expire = isoUtc(now + SESSION_WINDOW_MINUTES * 60_000)
 
-        // liveConnectConstraints pins the token to one model, so a leaked
-        // token cannot be pointed at anything else. The model is repeated as
-        // "models/..." -- the same id the setup frame carries.
+        // The body is an AuthToken, and AuthToken has exactly five fields:
+        // name (output only), expireTime, newSessionExpireTime, fieldMask and
+        // the config union -- which is `bidiGenerateContentSetup` or `uses`.
+        // There is no `liveConnectConstraints`: that name came off a curl
+        // example read at a glance, and the API answers 400 "Unknown name" for
+        // it. A variant with is omitted on purpose too -- if it is present,
+        // the docs say it *replaces* the setup frame whole, and the setup
+        // frame is where this app's system prompt and audio format live.
+        // Omit both and the token is a plain bearer credential, with the
+        // session still pinned by the model id in the setup frame.
         val body = """
             {
               "uses": 1,
               "expireTime": "$expire",
-              "newSessionExpireTime": "$newSessionExpire",
-              "liveConnectConstraints": {
-                "model": "$model",
-                "config": {
-                  "responseModalities": ["AUDIO"]
-                }
-              }
+              "newSessionExpireTime": "$newSessionExpire"
             }
         """.trimIndent()
 
