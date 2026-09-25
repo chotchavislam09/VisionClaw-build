@@ -161,6 +161,7 @@ fun CameraAccessScaffold(
                 StreamScreen(
                     wearablesViewModel = viewModel,
                     isPhoneMode = true,
+                    onOpenSettings = { viewModel.showSettings() },
                 )
             } else {
                 LiveKitStreamScreen(

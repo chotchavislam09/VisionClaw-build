@@ -46,6 +46,7 @@ import com.meta.wearable.dat.externalsampleapps.cameraaccess.webrtc.WebRTCSessio
 fun StreamScreen(
     wearablesViewModel: WearablesViewModel,
     isPhoneMode: Boolean = false,
+    onOpenSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     streamViewModel: StreamViewModel =
         viewModel(
@@ -169,6 +170,7 @@ fun StreamScreen(
                     }
                 },
                 isLiveActive = webrtcUiState.isActive,
+                onOpenSettings = onOpenSettings,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
         }

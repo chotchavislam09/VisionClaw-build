@@ -86,7 +86,14 @@ class GeminiLiveService {
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                val msg = t.message ?: "Unknown error"
+                // OkHttp puts the useful part here, not in the throwable: an
+                // HTTP failure surfaces as "Expected HTTP 101 response but was
+                // '403 Forbidden'" on the response while t stays generic. The
+                // first run on a device reported only "Failed to connect",
+                // which named neither side of the handshake.
+                val detail = response?.let { "HTTP ${it.code} ${it.message}" }
+                val reason = t.message ?: t.javaClass.simpleName
+                val msg = if (detail != null) "$detail ($reason)" else reason
                 Log.e(TAG, "WebSocket failure: $msg")
                 _connectionState.value = GeminiConnectionState.Error(msg)
                 _isModelSpeaking.value = false
@@ -96,6 +103,20 @@ class GeminiLiveService {
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closing: $code $reason")
+                // A close before setupComplete is the server rejecting the
+                // session -- bad key, model not available to this key. Report
+                // it as the failure it is instead of a plain disconnect.
+                if (_connectionState.value == GeminiConnectionState.Connecting ||
+                    _connectionState.value == GeminiConnectionState.SettingUp
+                ) {
+                    val msg = "Server closed the connection (code $code" +
+                        (if (reason.isNotEmpty()) ": $reason" else "") + ")"
+                    _connectionState.value = GeminiConnectionState.Error(msg)
+                    _isModelSpeaking.value = false
+                    resolveConnect(false)
+                    onDisconnected?.invoke(msg)
+                    return
+                }
                 _connectionState.value = GeminiConnectionState.Disconnected
                 _isModelSpeaking.value = false
                 resolveConnect(false)

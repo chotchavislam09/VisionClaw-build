@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,6 +30,7 @@ fun ControlsRow(
     onToggleLive: () -> Unit,
     isLiveActive: Boolean,
     modifier: Modifier = Modifier,
+    onOpenSettings: (() -> Unit)? = null,
 ) {
     Row(
         modifier = modifier
@@ -38,6 +40,25 @@ fun ControlsRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Present whenever the caller wires it. The phone screen is the app's
+        // front door and carries no top bar, so without this there is no way
+        // back into Settings once the call controls replace the home screen.
+        if (onOpenSettings != null) {
+            Button(
+                onClick = onOpenSettings,
+                modifier = Modifier.aspectRatio(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = AppColor.DeepBlue),
+                shape = CircleShape,
+                contentPadding = PaddingValues(0.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White,
+                )
+            }
+        }
+
         SwitchButton(
             label = "Stop",
             onClick = onStopStream,
