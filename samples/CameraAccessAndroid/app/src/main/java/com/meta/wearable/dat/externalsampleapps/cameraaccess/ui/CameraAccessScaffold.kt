@@ -96,6 +96,7 @@ fun CameraAccessScaffold(
   // source is chosen at track creation) and the next screen auto-starts with
   // the new source.
   var previousSource by remember { mutableStateOf<CaptureSource?>(null) }
+  var previousEngine by remember { mutableStateOf<IntelligenceEngine?>(null) }
   LaunchedEffect(captureSource, intelligenceEngine) {
     if (previousSource != null && previousSource != captureSource) {
       liveKitViewModel.leave()
@@ -125,7 +126,6 @@ fun CameraAccessScaffold(
   // the call screen's "Waiting for glasses video" placeholder is the loading
   // state. One attempt per entry into glasses mode, so a denied permission
   // surfaces once through the snackbar instead of looping.
-  var previousEngine by remember { mutableStateOf<IntelligenceEngine?>(null) }
   var glassesStartAttempted by remember { mutableStateOf(false) }
   var previousDeviceAvailable by remember { mutableStateOf(false) }
   LaunchedEffect(captureSource, uiState.isRegistered, uiState.hasActiveDevice) {
@@ -159,6 +159,7 @@ fun CameraAccessScaffold(
         captureSource == CaptureSource.PHONE ->
             if (intelligenceEngine == IntelligenceEngine.GEMINI) {
                 StreamScreen(
+                    wearablesViewModel = viewModel,
                     isPhoneMode = true,
                 )
             } else {

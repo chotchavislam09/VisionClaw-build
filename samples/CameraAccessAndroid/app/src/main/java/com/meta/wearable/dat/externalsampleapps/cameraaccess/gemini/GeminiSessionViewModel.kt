@@ -146,7 +146,6 @@ class GeminiSessionViewModel : ViewModel() {
     }
 
     fun sendVideoFrameIfThrottled(bitmap: Bitmap) {
-        if (!SettingsManager.videoStreamingEnabled) return
         if (!_uiState.value.isGeminiActive) return
         if (_uiState.value.connectionState != GeminiConnectionState.Ready) return
         val now = System.currentTimeMillis()

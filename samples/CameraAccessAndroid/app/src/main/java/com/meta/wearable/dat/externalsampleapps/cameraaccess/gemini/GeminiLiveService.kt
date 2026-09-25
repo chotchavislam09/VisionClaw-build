@@ -16,7 +16,6 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
-import okio.BufferedSource
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -83,8 +82,11 @@ class GeminiLiveService {
                 handleMessage(text)
             }
 
-            override fun onMessage(webSocket: WebSocket, bytes: BufferedSource) {
-                handleMessage(bytes.readUtf8())
+            // The Live API always answers with binary frames, and OkHttp hands
+            // those to onMessage(String) already decoded, so the text path below
+            // is the one that runs.
+            override fun onMessage(webSocket: WebSocket, text: String) {
+                handleMessage(text)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -148,7 +150,7 @@ class GeminiLiveService {
                     })
                 })
             }
-            webSocket?.send(json.toString())
+            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
         }
     }
 
@@ -166,7 +168,7 @@ class GeminiLiveService {
                     })
                 })
             }
-            webSocket?.send(json.toString())
+            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
         }
     }
 
@@ -183,7 +185,7 @@ class GeminiLiveService {
                     }))
                 })
             }
-            webSocket?.send(json.toString())
+            webSocket?.send(json.toString().toByteArray(Charsets.UTF_8))
         }
     }
 
@@ -235,7 +237,7 @@ class GeminiLiveService {
             })
         }
         // Send directly (not via sendExecutor) to ensure it's the first message
-        webSocket?.send(setup.toString())
+        webSocket?.send(setup.toString().toByteArray(Charsets.UTF_8))
     }
 
     private fun handleMessage(text: String) {
