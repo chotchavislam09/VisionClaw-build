@@ -170,6 +170,24 @@ object SettingsManager {
         get() = prefs.getString("geminiSystemPrompt", null) ?: DEFAULT_SYSTEM_PROMPT
         set(value) = prefs.edit().putString("geminiSystemPrompt", value).apply()
 
+    /** Extra instruction layered on top of the system prompt; empty by default. */
+    var geminiAdditionalPrompt: String
+        get() = prefs.getString("geminiAdditionalPrompt", null).orEmpty()
+        set(value) = prefs.edit().putString("geminiAdditionalPrompt", value).apply()
+
+    /**
+     * What actually reaches Google: the system prompt, then the person's own
+     * addition under its own heading. Kept as one string so the websocket setup
+     * frame keeps a single systemInstruction part, and changing the addition
+     * never means editing the system prompt to get the base behaviour back.
+     */
+    val geminiEffectiveInstruction: String
+        get() {
+            val addition = geminiAdditionalPrompt.trim()
+            if (addition.isEmpty()) return geminiSystemPrompt
+            return "$geminiSystemPrompt\n\nAdditional instructions from the person:\n$addition"
+        }
+
     var webrtcSignalingURL: String
         get() = prefs.getString("webrtcSignalingURL", null) ?: DEFAULT_SIGNALING_URL
         set(value) = prefs.edit().putString("webrtcSignalingURL", value).apply()

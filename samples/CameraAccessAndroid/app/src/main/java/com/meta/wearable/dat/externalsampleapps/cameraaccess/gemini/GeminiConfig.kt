@@ -15,8 +15,9 @@ object GeminiConfig {
     const val VIDEO_FRAME_INTERVAL_MS = 1000L
     const val VIDEO_JPEG_QUALITY = 50
 
+    /** System prompt plus the user's own addition, already composed. */
     val systemInstruction: String
-        get() = SettingsManager.geminiSystemPrompt
+        get() = SettingsManager.geminiEffectiveInstruction
 
     val apiKey: String
         get() = SettingsManager.geminiAPIKey

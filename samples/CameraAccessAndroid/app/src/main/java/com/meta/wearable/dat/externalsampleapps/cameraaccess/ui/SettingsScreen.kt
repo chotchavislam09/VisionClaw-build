@@ -384,18 +384,22 @@ private fun GeminiSettingsScreen(
 ) {
     var apiKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
     var systemPrompt by remember { mutableStateOf(SettingsManager.geminiSystemPrompt) }
+    var additionalPrompt by remember { mutableStateOf(SettingsManager.geminiAdditionalPrompt) }
     var savedKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
     var savedPrompt by remember { mutableStateOf(SettingsManager.geminiSystemPrompt) }
 
     val normalizedKey = apiKey.trim()
     val normalizedPrompt = systemPrompt.trim()
+    val normalizedAdditional = additionalPrompt.trim()
     val keyDirty = normalizedKey != savedKey
     val promptDirty = normalizedPrompt != savedPrompt
+    val additionalDirty = normalizedAdditional != SettingsManager.geminiAdditionalPrompt
     val keySavedAndUsable = normalizedKey == savedKey && SettingsManager.isGeminiKeyUsable
 
     fun persist() {
         SettingsManager.geminiAPIKey = normalizedKey
         SettingsManager.geminiSystemPrompt = normalizedPrompt
+        SettingsManager.geminiAdditionalPrompt = normalizedAdditional
         savedKey = normalizedKey
         savedPrompt = normalizedPrompt
     }
@@ -455,14 +459,29 @@ private fun GeminiSettingsScreen(
             )
             FooterText("Applies to the next call.")
 
+            SectionHeader("Additional prompt")
+            OutlinedTextField(
+                value = additionalPrompt,
+                onValueChange = { additionalPrompt = it },
+                modifier = Modifier.fillMaxWidth().height(120.dp),
+                label = { Text("Additional prompt") },
+                placeholder = { Text("Optional. Added after the system prompt.") },
+                textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+            )
+            FooterText(
+                "Layers on top of the system prompt without replacing it. Empty " +
+                    "means the system prompt alone -- clear this to get the base " +
+                    "behaviour back.",
+            )
+
             Button(
                 onClick = { persist() },
-                enabled = keyDirty || promptDirty,
+                enabled = keyDirty || promptDirty || additionalDirty,
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Text("Save")
             }
-            if (keyDirty || promptDirty) {
+            if (keyDirty || promptDirty || additionalDirty) {
                 FooterText("Unsaved changes.")
             }
 
