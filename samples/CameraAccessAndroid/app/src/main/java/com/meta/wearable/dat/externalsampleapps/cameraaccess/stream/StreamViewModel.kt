@@ -43,6 +43,8 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -57,6 +59,10 @@ class StreamViewModel(
   companion object {
     private const val TAG = "StreamViewModel"
     private val INITIAL_STATE = StreamUiState()
+
+    // Just under the service's 10 minute wake lock ceiling, so each re-arm
+    // lands before the previous lock lapses rather than after.
+    private const val WAKELOCK_REARM_INTERVAL_MS = 9 * 60 * 1000L
   }
 
   private val deviceSelector: DeviceSelector = wearablesViewModel.deviceSelector
@@ -67,6 +73,7 @@ class StreamViewModel(
 
   private var videoJob: Job? = null
   private var stateJob: Job? = null
+  private var wakeLockJob: Job? = null
 
   // VisionClaw additions
   var webrtcViewModel: WebRTCSessionViewModel? = null
@@ -79,7 +86,15 @@ class StreamViewModel(
     videoJob?.cancel()
     stateJob?.cancel()
 
-    // Start foreground service to keep streaming alive in background / screen locked
+    // Start foreground service to keep streaming alive in background / screen locked.
+    // The DAT session is on this end of the link too: the glasses camera belongs
+    // to a process, and a backgrounded or dozing app loses it regardless of what
+    // the glasses think. The service holds a wake lock, but it is acquired with a
+    // 10 minute ceiling, and when it lapses mid-session the stream dies under a
+    // user who is holding still and doing nothing wrong. Re-arming it on a
+    // generous interval keeps a pocketed phone streaming for a whole session;
+    // holding it once for the session's length is not an option, since a leaked
+    // non-expiring wake lock burns battery even after the app is gone.
     StreamingService.start(getApplication())
 
     val streamSession =
@@ -91,6 +106,20 @@ class StreamViewModel(
             )
             .also { streamSession = it }
     _uiState.update { it.copy(streamingMode = StreamingMode.GLASSES) }
+
+    // Keep the wake lock alive for as long as the session runs. The service
+    // still owns the lock -- this only re-arms it before its own expiry, and
+    // the service drops it when it is stopped, so a session that ends still
+    // releases everything. Cancelled in stopStream().
+    wakeLockJob?.cancel()
+    wakeLockJob =
+        viewModelScope.launch {
+          while (isActive) {
+            delay(WAKELOCK_REARM_INTERVAL_MS)
+            StreamingService.start(getApplication())
+          }
+        }
+
     videoJob = viewModelScope.launch { streamSession.videoStream.collect { handleVideoFrame(it) } }
     stateJob =
         viewModelScope.launch {
@@ -131,6 +160,8 @@ class StreamViewModel(
   fun stopStream() {
     // Stop foreground service
     StreamingService.stop(getApplication())
+    wakeLockJob?.cancel()
+    wakeLockJob = null
 
     videoJob?.cancel()
     videoJob = null
