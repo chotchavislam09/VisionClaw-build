@@ -7,6 +7,15 @@ object GeminiConfig {
         "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
     const val MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
+    // Ephemeral-token path. A bare API key can no longer open this socket:
+    // Google is retiring key auth on the Live API in favour of short-lived
+    // tokens, and the rejection reads as a generic 1008 either way. Mirrors
+    // the two calls Google's own ephemeral-token curl examples make.
+    const val TOKENS_URL =
+        "https://generativelanguage.googleapis.com/v1beta/auth_tokens"
+    const val CONSTRAINED_WEBSOCKET_BASE_URL =
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained"
+
     const val INPUT_AUDIO_SAMPLE_RATE = 16000
     const val OUTPUT_AUDIO_SAMPLE_RATE = 24000
     const val AUDIO_CHANNELS = 1
@@ -44,6 +53,10 @@ object GeminiConfig {
 
     val apiKeyHeader: String?
         get() = if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty()) null else apiKey
+
+    /** The websocket address to open for a freshly minted ephemeral token. */
+    fun constrainedWebsocketURL(token: String): String =
+        "$CONSTRAINED_WEBSOCKET_BASE_URL?access_token=$token"
 
     val isConfigured: Boolean
         get() = apiKey != "YOUR_GEMINI_API_KEY" && apiKey.isNotEmpty()

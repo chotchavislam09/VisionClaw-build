@@ -60,8 +60,7 @@ class GeminiLiveService {
         .build()
 
     fun connect(callback: (Boolean) -> Unit) {
-        val url = GeminiConfig.websocketURL()
-        if (url == null) {
+        if (GeminiConfig.websocketURL() == null) {
             _connectionState.value = GeminiConnectionState.Error("No API key configured")
             callback(false)
             return
@@ -70,12 +69,24 @@ class GeminiLiveService {
         _connectionState.value = GeminiConnectionState.Connecting
         connectCallback = callback
 
-        // The key travels in the x-goog-api-key header rather than in the URL:
-        // a query string is what proxies and HTTP logs keep. Google accepts
-        // either form on this endpoint.
-        val request = GeminiConfig.apiKeyHeader?.let {
-            Request.Builder().url(url).header("x-goog-api-key", it).build()
-        } ?: Request.Builder().url(url).build()
+        // Mint the short-lived token on a background thread first: this is a
+        // network POST, and the Live API will not open on a bare key.
+        Executors.newSingleThreadExecutor().execute {
+            when (val result = EphemeralTokenProvider.mint(GeminiConfig.apiKey, GeminiConfig.MODEL)) {
+                is EphemeralTokenProvider.Result.Failure -> {
+                    _connectionState.value = GeminiConnectionState.Error(result.message)
+                    resolveConnect(false)
+                    onDisconnected?.invoke(result.message)
+                }
+                is EphemeralTokenProvider.Result.Token -> openSocket(result.value)
+            }
+        }
+    }
+
+    private fun openSocket(accessToken: String) {
+        val request = Request.Builder()
+            .url(GeminiConfig.constrainedWebsocketURL(accessToken))
+            .build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened")
