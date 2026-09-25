@@ -46,6 +46,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.gemini.GeminiConfig
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.CaptureSource
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewayApi
 import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.GatewayStatus
@@ -443,10 +444,23 @@ private fun GeminiSettingsScreen(
                     color = AppColor.Green,
                 )
             }
+            // A key that is neither AIza... nor AQ... is nearly always a paste
+            // that lost its tail. Catching it here costs nothing; letting it
+            // through costs a call that dies with Google's generic auth error,
+            // which reads like a server fault rather than a bad paste.
+            if (GeminiConfig.apiKeyLooksMalformed) {
+                Text(
+                    "This does not look like a Google API key -- they start " +
+                        "with AIza or AQ. Check for a truncated paste.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColor.Red,
+                )
+            }
             FooterText(
                 "From aistudio.google.com/apikey. Stored on this phone and sent " +
-                    "only to Google when a call starts -- it does not pass through " +
-                    "the gateway.",
+                    "to Google when a call starts -- it does not pass through the " +
+                    "gateway. Google then attaches it to the request as it reaches " +
+                    "the model, so the model's logs carry the key.",
             )
 
             SectionHeader("System prompt")

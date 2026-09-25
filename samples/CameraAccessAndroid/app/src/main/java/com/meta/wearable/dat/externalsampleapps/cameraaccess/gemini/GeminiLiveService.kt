@@ -70,7 +70,12 @@ class GeminiLiveService {
         _connectionState.value = GeminiConnectionState.Connecting
         connectCallback = callback
 
-        val request = Request.Builder().url(url).build()
+        // The key travels in the x-goog-api-key header rather than in the URL:
+        // a query string is what proxies and HTTP logs keep. Google accepts
+        // either form on this endpoint.
+        val request = GeminiConfig.apiKeyHeader?.let {
+            Request.Builder().url(url).header("x-goog-api-key", it).build()
+        } ?: Request.Builder().url(url).build()
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened")
@@ -253,8 +258,18 @@ class GeminiLiveService {
                 put("outputAudioTranscription", JSONObject())
             })
         }
-        // Send directly (not via sendExecutor) to ensure it's the first message
-        webSocket?.send(setup.toString())
+        // Send directly (not via sendExecutor) to ensure it's the first message.
+        // The boolean matters: false means the frame never left, and the
+        // connection then sits in SettingUp until the 15s timeout reports a
+        // timeout that was really a send failure.
+        val queued = webSocket?.send(setup.toString()) ?: false
+        if (!queued) {
+            val msg = "Could not send the setup frame (websocket busy or closed)"
+            Log.e(TAG, msg)
+            _connectionState.value = GeminiConnectionState.Error(msg)
+            resolveConnect(false)
+            onDisconnected?.invoke(msg)
+        }
     }
 
     private fun handleMessage(text: String) {
@@ -265,6 +280,25 @@ class GeminiLiveService {
             if (json.has("setupComplete")) {
                 _connectionState.value = GeminiConnectionState.Ready
                 resolveConnect(true)
+                return
+            }
+
+            // An error frame. Without this branch it fell through every check
+            // and was dropped in silence -- the server said why and the app
+            // showed only the close code that followed.
+            if (json.has("error")) {
+                val error = json.optJSONObject("error")
+                val code = error?.optInt("code", 0) ?: 0
+                val status = error?.optString("status", "").orEmpty()
+                val message = error?.optString("message", "").orEmpty()
+                val msg = "Gemini error $code" +
+                    (if (status.isNotEmpty()) " $status" else "") +
+                    (if (message.isNotEmpty()) ": $message" else "")
+                Log.e(TAG, msg)
+                _connectionState.value = GeminiConnectionState.Error(msg)
+                _isModelSpeaking.value = false
+                resolveConnect(false)
+                onDisconnected?.invoke(msg)
                 return
             }
 
@@ -345,8 +379,12 @@ class GeminiLiveService {
                     }
                 }
             }
+            // Anything else: log it rather than let it disappear. A field the
+            // client does not know (a new server message, a rejected frame) is
+            // otherwise invisible, and "the app did nothing" is unfixable.
+            Log.d(TAG, "Unhandled frame: ${text.take(500)}")
         } catch (e: Exception) {
-            Log.e(TAG, "Error parsing message: ${e.message}")
+            Log.e(TAG, "Error parsing message: ${e.message}: ${text.take(500)}")
         }
     }
 }

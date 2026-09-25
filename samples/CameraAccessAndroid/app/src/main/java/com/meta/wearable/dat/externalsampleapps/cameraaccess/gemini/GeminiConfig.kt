@@ -22,10 +22,28 @@ object GeminiConfig {
     val apiKey: String
         get() = SettingsManager.geminiAPIKey
 
+    /** Who the key is, as far as the settings screen can tell without a call:
+     *  Google's current keys begin "AIza", newer ones "AQ.". A key that is
+     *  neither is almost certainly a truncated paste, and saying so beats
+     *  letting the server answer 1008 with a generic auth error. */
+    val apiKeyLooksMalformed: Boolean
+        get() {
+            val k = apiKey.trim()
+            if (k.isEmpty() || k == "YOUR_GEMINI_API_KEY") return false
+            return !(k.startsWith("AIza") || k.startsWith("AQ."))
+        }
+
+    // The key does NOT go in the URL. It rides in the x-goog-api-key header
+    // instead: query strings are the first thing a proxy or an HTTP logger
+    // keeps, and a key sitting in `?key=` is a key that leaks. Google accepts
+    // either form on this endpoint.
     fun websocketURL(): String? {
         if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty()) return null
-        return "$WEBSOCKET_BASE_URL?key=$apiKey"
+        return WEBSOCKET_BASE_URL
     }
+
+    val apiKeyHeader: String?
+        get() = if (apiKey == "YOUR_GEMINI_API_KEY" || apiKey.isEmpty()) null else apiKey
 
     val isConfigured: Boolean
         get() = apiKey != "YOUR_GEMINI_API_KEY" && apiKey.isNotEmpty()
