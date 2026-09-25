@@ -102,7 +102,11 @@ fun CameraAccessScaffold(
       liveKitViewModel.leave()
     }
     // Engine switch replaces the call screen itself, so an open call has to
-    // end rather than linger behind the new one.
+    // end rather than linger behind the new one -- and the DAT stream goes
+    // with it. Disposing the old screen stops its own stream and Gemini
+    // session, and navigateToDeviceSelection() clears isStreaming, which
+    // re-arms the single auto-start below; without that reset the next
+    // screen would sit on "Waiting for glasses video".
     if (previousEngine != null && previousEngine != intelligenceEngine) {
       liveKitViewModel.leave()
       viewModel.navigateToDeviceSelection()
@@ -171,11 +175,23 @@ fun CameraAccessScaffold(
         // Glasses mode with registered glasses: the SAME call screen, with
         // glasses frames as the video source, is the root -- streaming
         // auto-starts, so there is no start-choice interstitial.
+        // The engine picks the screen here exactly as it does for phone mode.
+        // Routing glasses to LiveKitStreamScreen whatever the engine was the
+        // bug behind "glasses + Gemini": that screen's call button starts the
+        // gateway call, and the Gemini one simply had no button to press.
         uiState.isRegistered ->
-            LiveKitStreamScreen(
-                onOpenSettings = { viewModel.showSettings() },
-                glassesIssue = uiState.glassesIssue,
-            )
+            if (intelligenceEngine == IntelligenceEngine.GEMINI) {
+                StreamScreen(
+                    wearablesViewModel = viewModel,
+                    isPhoneMode = false,
+                    onOpenSettings = { viewModel.showSettings() },
+                )
+            } else {
+                LiveKitStreamScreen(
+                    onOpenSettings = { viewModel.showSettings() },
+                    glassesIssue = uiState.glassesIssue,
+                )
+            }
         // Unregistered glasses mode: the connect screen.
         else ->
             HomeScreen(
