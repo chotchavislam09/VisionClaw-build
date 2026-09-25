@@ -11,10 +11,17 @@ object GeminiConfig {
     // Google is retiring key auth on the Live API in favour of short-lived
     // tokens, and the rejection reads as a generic 1008 either way. Mirrors
     // the two calls Google's own ephemeral-token curl examples make.
+    //
+    // Both calls are pinned to v1alpha, and that is not cosmetic. The
+    // ephemeral-token docs and the JS SDK source both say the token is only
+    // accepted on v1alpha -- minted on v1beta and opened on v1beta, the
+    // handshake succeeds and then the server goes silent instead of rejecting
+    // it with a code. That silence is exactly what a device run reported back
+    // before this line was changed.
     const val TOKENS_URL =
-        "https://generativelanguage.googleapis.com/v1beta/auth_tokens"
+        "https://generativelanguage.googleapis.com/v1alpha/auth_tokens"
     const val CONSTRAINED_WEBSOCKET_BASE_URL =
-        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained"
+        "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContentConstrained"
 
     const val INPUT_AUDIO_SAMPLE_RATE = 16000
     const val OUTPUT_AUDIO_SAMPLE_RATE = 24000

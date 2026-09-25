@@ -273,8 +273,6 @@ class GeminiLiveService {
                         put("text", GeminiConfig.systemInstruction)
                     }))
                 })
-                put("tools", JSONArray().put(JSONObject().apply {
-                }))
                 put("realtimeInputConfig", JSONObject().apply {
                     put("automaticActivityDetection", JSONObject().apply {
                         put("disabled", false)
