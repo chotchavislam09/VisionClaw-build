@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -194,9 +195,10 @@ private fun SettingsMainScreen(
             // surfacing them as primary fields made a configured setup look
             // like one awaiting setup.
             NavigationRow("Gateway settings") { onOpen(SettingsSubScreen.GATEWAY) }
-            if (intelligenceEngine == IntelligenceEngine.GEMINI) {
-                NavigationRow("Gemini settings") { onOpen(SettingsSubScreen.GEMINI) }
-            }
+            // Always listed. Gating this on the engine hid the only place the
+            // key lives exactly when it was needed -- on a fresh install the
+            // engine defaults to OpenAI, so the row was never there to find.
+            NavigationRow("Gemini settings") { onOpen(SettingsSubScreen.GEMINI) }
 
             // Reset
             TextButton(onClick = { showResetDialog = true }) {
@@ -365,7 +367,15 @@ private fun GatewaySettingsScreen(
     }
 }
 
-/** API key + system prompt for the direct Gemini Live path. */
+/**
+ * API key + system prompt for the direct Gemini Live path.
+ *
+ * Writes land in SharedPreferences only when Save is pressed (or the screen is
+ * left via back). The key is what switches the direct path on: while it is
+ * empty GeminiConfig.isConfigured is false and a Gemini call cannot open. The
+ * per-field "Saved" note exists because audio mode never opens a keyboard --
+ * a silent commit left no evidence the key had been taken.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun GeminiSettingsScreen(
@@ -374,10 +384,24 @@ private fun GeminiSettingsScreen(
 ) {
     var apiKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
     var systemPrompt by remember { mutableStateOf(SettingsManager.geminiSystemPrompt) }
+    var savedKey by remember { mutableStateOf(SettingsManager.geminiAPIKey) }
+    var savedPrompt by remember { mutableStateOf(SettingsManager.geminiSystemPrompt) }
+
+    val normalizedKey = apiKey.trim()
+    val normalizedPrompt = systemPrompt.trim()
+    val keyDirty = normalizedKey != savedKey
+    val promptDirty = normalizedPrompt != savedPrompt
+    val keySavedAndUsable = normalizedKey == savedKey && SettingsManager.isGeminiKeyUsable
+
+    fun persist() {
+        SettingsManager.geminiAPIKey = normalizedKey
+        SettingsManager.geminiSystemPrompt = normalizedPrompt
+        savedKey = normalizedKey
+        savedPrompt = normalizedPrompt
+    }
 
     fun saveAndClose() {
-        SettingsManager.geminiAPIKey = apiKey.trim()
-        SettingsManager.geminiSystemPrompt = systemPrompt.trim()
+        persist()
         onBack()
     }
 
@@ -408,6 +432,13 @@ private fun GeminiSettingsScreen(
                 label = "Gemini API key",
                 placeholder = "AIza... or AQ...",
             )
+            if (apiKey.isNotEmpty() && keySavedAndUsable) {
+                Text(
+                    "Saved",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = AppColor.Green,
+                )
+            }
             FooterText(
                 "From aistudio.google.com/apikey. Stored on this phone and sent " +
                     "only to Google when a call starts -- it does not pass through " +
@@ -423,6 +454,17 @@ private fun GeminiSettingsScreen(
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             )
             FooterText("Applies to the next call.")
+
+            Button(
+                onClick = { persist() },
+                enabled = keyDirty || promptDirty,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("Save")
+            }
+            if (keyDirty || promptDirty) {
+                FooterText("Unsaved changes.")
+            }
 
             Spacer(modifier = Modifier.height(32.dp))
         }

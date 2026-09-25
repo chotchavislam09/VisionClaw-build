@@ -158,6 +158,14 @@ object SettingsManager {
         get() = prefs.getString("geminiAPIKey", null) ?: DEFAULT_GEMINI_API_KEY
         set(value) = prefs.edit().putString("geminiAPIKey", value).apply()
 
+    /** True once a real key is stored: GeminiConfig.isConfigured has the same
+     *  test, and a Gemini call cannot open while it is false. */
+    val isGeminiKeyUsable: Boolean
+        get() {
+            val key = geminiAPIKey
+            return key.isNotEmpty() && key != DEFAULT_GEMINI_API_KEY
+        }
+
     var geminiSystemPrompt: String
         get() = prefs.getString("geminiSystemPrompt", null) ?: DEFAULT_SYSTEM_PROMPT
         set(value) = prefs.edit().putString("geminiSystemPrompt", value).apply()
