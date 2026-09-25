@@ -122,24 +122,30 @@ class GeminiLiveService {
                 sendSetupMessage()
             }
 
+            // OkHttp 4.x does not route pongs to a listener callback -- there
+            // is no onPong to override, and a build with one fails on
+            // "'onPong' overrides nothing". Any incoming frame still proves
+            // the socket is alive, though.
+            //
+            // Binary frames are also the Live API's native shape: reading only
+            // the String overload would leave such a frame a silent no-op,
+            // which on a device looks exactly like no frame at all.
+            //
+            // So the liveness stamp lives where the frames arrive. A dead
+            // socket and a quiet one then stop looking identical: one stops
+            // producing frames, and "no frame for 45s" after setup is a fact
+            // the timeout can report instead of a guess.
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
-                // Binary frames are the Live API's native shape. Reading them
-                // through the String overload would leave any frame that came
-                // in binary as a silent no-op, which is indistinguishable on a
-                // device from the server not answering at all.
+                lastPongAt = System.currentTimeMillis()
                 handleMessage(bytes.utf8())
             }
 
-            // OkHttp routes a pong here. On a mobile network this is often the
-            // only evidence that the socket is still alive.
-            override fun onPong(webSocket: WebSocket, payload: okio.ByteString) {
-                lastPongAt = System.currentTimeMillis()
-            }
-
-            // The Live API answers on binary frames and OkHttp delivers those
-            // through onMessage(String) already decoded, so this one overload
-            // covers both directions.
+            // A text frame. The Live API's own replies come in binary (handled
+            // above), but keep this: a proxy or a different server build may
+            // answer in text, and dropping it silently is the failure mode this
+            // branch has already been bitten by.
             override fun onMessage(webSocket: WebSocket, text: String) {
+                lastPongAt = System.currentTimeMillis()
                 handleMessage(text)
             }
 

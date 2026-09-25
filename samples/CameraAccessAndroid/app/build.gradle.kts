@@ -23,7 +23,11 @@ android {
     minSdk = 31
     targetSdk = 34
     versionCode = 1
-    versionName = "1.0"
+    // The app carries its own commit in the version string. On a device the
+    // only readable identifier is this, and "which build is actually
+    // installed" has already cost a diagnosis round: two builds reported the
+    // same behaviour and there was no way to tell them apart.
+    versionName = "1.0-" + (System.getenv("GITHUB_SHA")?.take(7) ?: "dev")
 
     testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     vectorDrawables { useSupportLibrary = true }
