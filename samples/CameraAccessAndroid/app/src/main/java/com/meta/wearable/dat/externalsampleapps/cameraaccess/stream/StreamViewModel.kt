@@ -63,6 +63,12 @@ class StreamViewModel(
     // Just under the service's 10 minute wake lock ceiling, so each re-arm
     // lands before the previous lock lapses rather than after.
     private const val WAKELOCK_REARM_INTERVAL_MS = 9 * 60 * 1000L
+
+    // How long to wait before re-arming a session that ended. A session that
+    // folds, walks out of range or loses its cable takes a moment to release
+    // the glasses; re-arming inside that window fails against a device still
+    // shutting the old one down.
+    private const val RECONNECT_DELAY_MS = 1_500L
   }
 
   private val deviceSelector: DeviceSelector = wearablesViewModel.deviceSelector
@@ -74,6 +80,33 @@ class StreamViewModel(
   private var videoJob: Job? = null
   private var stateJob: Job? = null
   private var wakeLockJob: Job? = null
+  private var reconnectJob: Job? = null
+
+  /**
+   * True once the user has asked for a stream and has not stopped it again.
+   *
+   * The screen is not the owner of the session and does not stay alive to hold
+   * it: it is disposed by anything merely covering it, and it is recomposed
+   * away on navigation, so `startStream()` can be cut short through no action
+   * of the user's. Reconnection keys off this flag rather than off the screen.
+   */
+  @Volatile private var userWantsStream = false
+
+  /**
+   * The lifecycle owner the screen handed over when it started the phone
+   * camera, kept so a dropped phone session can be re-armed without it.
+   * Null until phone mode has been started at least once.
+   */
+  private var lastLifecycleOwner: LifecycleOwner? = null
+
+  /**
+   * True once phone mode has been the active source.
+   *
+   * The stream always opens in glasses mode, so this is what tells reconnect
+   * which source to restore: a stopped session resets the UI state, and the
+   * mode is the one thing about it that must not be inferred back.
+   */
+  private var hasReachedPhoneCamera = false
 
   // VisionClaw additions
   var webrtcViewModel: WebRTCSessionViewModel? = null
@@ -85,6 +118,8 @@ class StreamViewModel(
   fun startStream() {
     videoJob?.cancel()
     stateJob?.cancel()
+    reconnectJob?.cancel()
+    userWantsStream = true
 
     // Start foreground service to keep streaming alive in background / screen locked.
     // The DAT session is on this end of the link too: the glasses camera belongs
@@ -130,17 +165,40 @@ class StreamViewModel(
             // navigate back when state transitioned to STOPPED
             if (currentState != prevState && currentState == StreamSessionState.STOPPED) {
               stopStream()
-              // The session ended on its own; this is the one place that
-              // really does release the foreground service, since stopStream()
-              // now only drops the wake lock.
+              // The session ended on its own. Release the foreground service
+              // first -- this is the one place that really does tear it down --
+              // and only then decide whether this is a return to the device
+              // picker or a session to be brought back.
               StreamingService.stop(getApplication())
-              wearablesViewModel.navigateToDeviceSelection()
+              // The state moves to STOPPED just as readily for a session the
+              // user ended as for one that dropped out from under them: the
+              // glasses folding, going out of range, or an unplugged USB cable
+              // all look the same from here. Without this branch the screen
+              // sits on the placeholder forever, with nothing left alive to
+              // retry, and the only way out is to leave and come back. iOS
+              // treats the same state as a retry signal (see
+              // StreamSessionViewModel.scheduleReconnect) and this mirrors it:
+              // keep retrying for as long as the user still wants the stream,
+              // and return to the picker only once they do not.
+              if (userWantsStream) {
+                // The D-pad Back button is what brings the user here on
+                // purpose, and it clears isStreaming before this point, so a
+                // stream the user left is never re-armed. Only a stream the
+                // user is still watching gets one.
+                scheduleReconnect()
+              } else {
+                wearablesViewModel.navigateToDeviceSelection()
+              }
             }
           }
         }
   }
 
   fun startPhoneCamera(lifecycleOwner: LifecycleOwner) {
+    lastLifecycleOwner = lifecycleOwner
+    hasReachedPhoneCamera = true
+    userWantsStream = true
+    reconnectJob?.cancel()
     val manager = PhoneCameraManager(getApplication())
     phoneCameraManager = manager
 
@@ -161,7 +219,42 @@ class StreamViewModel(
     Log.d(TAG, "Phone camera mode started")
   }
 
+  /**
+   * Brings the glasses stream back after it dropped without the user asking.
+   *
+   * The delay is not a backoff: a session that ends normally takes a moment to
+   * release the glasses on their side, and re-arming inside that window fails
+   * against a device that is still shutting the previous session down. If the
+   * retry itself does not take, [startStream] runs into STOPPED again and
+   * calls straight back here, so the retry loop keeps its own rhythm without a
+   * counter to maintain. It stops on its own when the user stops the stream,
+   * since every re-entry is gated on [userWantsStream].
+   */
+  private fun scheduleReconnect() {
+    val lifecycleOwner = lastLifecycleOwner
+    reconnectJob?.cancel()
+    reconnectJob =
+        viewModelScope.launch {
+          delay(RECONNECT_DELAY_MS)
+          if (!userWantsStream) return@launch
+          // Phone mode first: it is terminal. The phone camera either has a
+          // lifecycle owner to restart against or it does not, and when it does
+          // not, a dropped phone session stays dropped rather than falling
+          // through to the glasses -- that would silently switch the user's
+          // source. Glasses mode is only ever re-entered when phone mode has
+          // never run.
+          if (hasReachedPhoneCamera) {
+            lifecycleOwner?.let { startPhoneCamera(it) }
+          } else {
+            startStream()
+          }
+        }
+  }
+
   fun stopStream() {
+    userWantsStream = false
+    reconnectJob?.cancel()
+    reconnectJob = null
     // Release the wake lock, but do not tear the foreground service down here.
     // Stopping the service is what ends the DAT session on this end, and this
     // method is also how an assistant-only teardown releases its lock -- which
