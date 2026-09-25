@@ -20,6 +20,14 @@ data class GeminiUiState(
     val errorMessage: String? = null,
     val userTranscript: String = "",
     val aiTranscript: String = "",
+    /**
+     * What the connection is doing right now, in words. The status pill only
+     * reaches Ready or Error, so a connect that fails before either left the
+     * screen as bare "Connection timed out" -- which cannot distinguish "the
+     * socket never opened" from "it opened and the server never answered the
+     * setup frame". The two need different fixes, so the client says which.
+     */
+    val progress: String = "",
 )
 
 class GeminiSessionViewModel : ViewModel() {
@@ -47,7 +55,10 @@ class GeminiSessionViewModel : ViewModel() {
             return
         }
 
-        _uiState.value = _uiState.value.copy(isGeminiActive = true)
+        _uiState.value = _uiState.value.copy(
+            isGeminiActive = true,
+            progress = "Requesting session token...",
+        )
 
         // Wire audio callbacks
         audioManager.onAudioCaptured = lambda@{ data ->
@@ -97,6 +108,7 @@ class GeminiSessionViewModel : ViewModel() {
                     delay(100)
                     _uiState.value = _uiState.value.copy(
                         connectionState = geminiService.connectionState.value,
+                        progress = geminiService.progress.value,
                         isModelSpeaking = geminiService.isModelSpeaking.value,
                     )
                 }
@@ -109,7 +121,7 @@ class GeminiSessionViewModel : ViewModel() {
                         is GeminiConnectionState.Error -> state.message
                         else -> "Failed to connect to Gemini"
                     }
-                    _uiState.value = _uiState.value.copy(errorMessage = msg)
+                    _uiState.value = _uiState.value.copy(errorMessage = msg, progress = "")
                     geminiService.disconnect()
                     stateObservationJob?.cancel()
                     _uiState.value = _uiState.value.copy(

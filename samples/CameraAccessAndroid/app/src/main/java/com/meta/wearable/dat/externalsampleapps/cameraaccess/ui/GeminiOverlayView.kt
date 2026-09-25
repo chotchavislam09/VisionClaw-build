@@ -45,6 +45,14 @@ fun GeminiOverlay(
             connectionState = uiState.connectionState,
         )
 
+        // The handshake's current step, while it is still going. Without it a
+        // connect that stalls reads only as a red dot and a bare "Connection
+        // timed out", which names neither end of the handshake.
+        if (uiState.progress.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(4.dp))
+            ProgressLabel(text = uiState.progress)
+        }
+
         Spacer(modifier = Modifier.height(8.dp))
 
         // Transcripts
@@ -83,6 +91,22 @@ fun GeminiStatusBar(
             },
         )
     }
+}
+
+/** One line of plain language about what the connection is doing right now. */
+@Composable
+fun ProgressLabel(
+    text: String,
+    modifier: Modifier = Modifier,
+) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = 11.sp,
+        modifier = modifier
+            .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp),
+    )
 }
 
 @Composable

@@ -38,6 +38,16 @@ class GeminiLiveService {
     private val _isModelSpeaking = MutableStateFlow(false)
     val isModelSpeaking: StateFlow<Boolean> = _isModelSpeaking.asStateFlow()
 
+    /**
+     * Where the handshake currently stands, in words the user can read off the
+     * screen. Every failure on this path lands in the same flat "Connection
+     * timed out" unless the client records how far it got -- and "the socket
+     * never opened" and "the socket opened and the server ignored the setup
+     * frame" are different bugs in different places.
+     */
+    private val _progress = MutableStateFlow("")
+    val progress: StateFlow<String> = _progress.asStateFlow()
+
     var onAudioReceived: ((ByteArray) -> Unit)? = null
     var onTurnComplete: (() -> Unit)? = null
     var onInterrupted: (() -> Unit)? = null
@@ -67,6 +77,7 @@ class GeminiLiveService {
         }
 
         _connectionState.value = GeminiConnectionState.Connecting
+        _progress.value = "Minting session token..."
         connectCallback = callback
 
         // Mint the short-lived token on a background thread first: this is a
@@ -74,11 +85,15 @@ class GeminiLiveService {
         Executors.newSingleThreadExecutor().execute {
             when (val result = EphemeralTokenProvider.mint(GeminiConfig.apiKey, GeminiConfig.MODEL)) {
                 is EphemeralTokenProvider.Result.Failure -> {
+                    _progress.value = ""
                     _connectionState.value = GeminiConnectionState.Error(result.message)
                     resolveConnect(false)
                     onDisconnected?.invoke(result.message)
                 }
-                is EphemeralTokenProvider.Result.Token -> openSocket(result.value)
+                is EphemeralTokenProvider.Result.Token -> {
+                    _progress.value = "Token received. Opening socket..."
+                    openSocket(result.value)
+                }
             }
         }
     }
@@ -91,6 +106,7 @@ class GeminiLiveService {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket opened")
                 _connectionState.value = GeminiConnectionState.SettingUp
+                _progress.value = "Socket open. Sent session setup; waiting for reply..."
                 sendSetupMessage()
             }
 
@@ -111,6 +127,7 @@ class GeminiLiveService {
                 val reason = t.message ?: t.javaClass.simpleName
                 val msg = if (detail != null) "$detail ($reason)" else reason
                 Log.e(TAG, "WebSocket failure: $msg")
+                _progress.value = ""
                 _connectionState.value = GeminiConnectionState.Error(msg)
                 _isModelSpeaking.value = false
                 resolveConnect(false)
@@ -127,6 +144,7 @@ class GeminiLiveService {
                 ) {
                     val msg = "Server closed the connection (code $code" +
                         (if (reason.isNotEmpty()) ": $reason" else "") + ")"
+                    _progress.value = ""
                     _connectionState.value = GeminiConnectionState.Error(msg)
                     _isModelSpeaking.value = false
                     resolveConnect(false)
@@ -152,8 +170,16 @@ class GeminiLiveService {
                 override fun run() {
                     if (_connectionState.value == GeminiConnectionState.Connecting
                         || _connectionState.value == GeminiConnectionState.SettingUp) {
-                        Log.e(TAG, "Connection timed out")
-                        _connectionState.value = GeminiConnectionState.Error("Connection timed out")
+                        // Carry the stage into the message. "Connection timed
+                        // out" alone sends you hunting in the wrong file: a
+                        // timeout before the socket opened is a transport
+                        // problem, one after is the server sitting silent on
+                        // the setup frame.
+                        val stage = _progress.value.ifEmpty { "no stage recorded" }
+                        val msg = "Connection timed out ($stage)"
+                        Log.e(TAG, msg)
+                        _progress.value = ""
+                        _connectionState.value = GeminiConnectionState.Error(msg)
                         resolveConnect(false)
                     }
                 }
@@ -277,6 +303,7 @@ class GeminiLiveService {
         if (!queued) {
             val msg = "Could not send the setup frame (websocket busy or closed)"
             Log.e(TAG, msg)
+            _progress.value = ""
             _connectionState.value = GeminiConnectionState.Error(msg)
             resolveConnect(false)
             onDisconnected?.invoke(msg)
@@ -289,6 +316,7 @@ class GeminiLiveService {
 
             // Setup complete
             if (json.has("setupComplete")) {
+                _progress.value = ""
                 _connectionState.value = GeminiConnectionState.Ready
                 resolveConnect(true)
                 return
@@ -306,6 +334,7 @@ class GeminiLiveService {
                     (if (status.isNotEmpty()) " $status" else "") +
                     (if (message.isNotEmpty()) ": $message" else "")
                 Log.e(TAG, msg)
+                _progress.value = ""
                 _connectionState.value = GeminiConnectionState.Error(msg)
                 _isModelSpeaking.value = false
                 resolveConnect(false)
