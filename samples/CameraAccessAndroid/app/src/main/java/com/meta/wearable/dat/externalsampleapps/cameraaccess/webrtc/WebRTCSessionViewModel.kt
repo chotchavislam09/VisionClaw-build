@@ -26,7 +26,6 @@ sealed class WebRTCConnectionState {
     object WaitingForPeer : WebRTCConnectionState()
     object Connected : WebRTCConnectionState()
     object Backgrounded : WebRTCConnectionState()
-    data class Error(val message: String) : WebRTCConnectionState()
 }
 
 data class WebRTCUiState(
@@ -276,7 +275,7 @@ class WebRTCSessionViewModel(application: Application) : AndroidViewModel(applic
             }
             PeerConnection.IceConnectionState.FAILED -> {
                 _uiState.value = _uiState.value.copy(
-                    connectionState = WebRTCConnectionState.Error("Connection failed")
+                    connectionState = WebRTCConnectionState.Connecting
                 )
             }
             PeerConnection.IceConnectionState.CLOSED -> {

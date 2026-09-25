@@ -8,12 +8,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,40 +42,56 @@ fun WebRTCOverlay(
     uiState: WebRTCUiState,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // Status pill
-        StatusPill(
-            label = when (uiState.connectionState) {
-                is WebRTCConnectionState.Connected -> "Live"
-                is WebRTCConnectionState.Connecting -> "Connecting..."
-                is WebRTCConnectionState.WaitingForPeer -> "Waiting..."
-                is WebRTCConnectionState.Backgrounded -> "Paused"
-                is WebRTCConnectionState.Error -> "Error"
-                is WebRTCConnectionState.Disconnected -> "Off"
-            },
-            color = when (uiState.connectionState) {
-                is WebRTCConnectionState.Connected -> Color(0xFF4CAF50)
-                is WebRTCConnectionState.Connecting,
-                is WebRTCConnectionState.WaitingForPeer -> Color(0xFFFF9800)
-                is WebRTCConnectionState.Backgrounded -> Color(0xFFFF9800)
-                is WebRTCConnectionState.Error -> Color(0xFFF44336)
-                is WebRTCConnectionState.Disconnected -> Color(0xFF9E9E9E)
-            },
-        )
+    // The error kept its own toasts until now, and a toast is the wrong shape
+    // for it: it expires in seconds, and the failure it describes ("no
+    // signaling server set") is a state the user has to read and act on in
+    // Settings. The pill alone was not enough either -- it said "Error" and
+    // nothing said what. The sentence sits under the pills until Live is
+    // switched off, which is what clears the state.
+    Column(modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            // Status pill
+            StatusPill(
+                label = when (uiState.connectionState) {
+                    is WebRTCConnectionState.Connected -> "Live"
+                    is WebRTCConnectionState.Connecting -> "Connecting..."
+                    is WebRTCConnectionState.WaitingForPeer -> "Waiting..."
+                    is WebRTCConnectionState.Backgrounded -> "Paused"
+                    is WebRTCConnectionState.Disconnected -> "Off"
+                },
+                color = when (uiState.connectionState) {
+                    is WebRTCConnectionState.Connected -> Color(0xFF4CAF50)
+                    is WebRTCConnectionState.Connecting,
+                    is WebRTCConnectionState.WaitingForPeer -> Color(0xFFFF9800)
+                    is WebRTCConnectionState.Backgrounded -> Color(0xFFFF9800)
+                    is WebRTCConnectionState.Disconnected -> Color(0xFF9E9E9E)
+                },
+            )
 
-        // Room code pill (tap to copy)
-        if (uiState.roomCode.isNotEmpty()) {
-            RoomCodePill(code = uiState.roomCode)
+            // Room code pill (tap to copy)
+            if (uiState.roomCode.isNotEmpty()) {
+                RoomCodePill(code = uiState.roomCode)
+            }
+
+            // Mic status
+            if (uiState.connectionState is WebRTCConnectionState.Connected) {
+                StatusPill(
+                    label = if (uiState.isMuted) "Muted" else "Mic On",
+                    color = if (uiState.isMuted) Color(0xFFF44336) else Color(0xFF4CAF50),
+                )
+            }
         }
 
-        // Mic status
-        if (uiState.connectionState is WebRTCConnectionState.Connected) {
-            StatusPill(
-                label = if (uiState.isMuted) "Muted" else "Mic On",
-                color = if (uiState.isMuted) Color(0xFFF44336) else Color(0xFF4CAF50),
+        val errorText = uiState.errorMessage
+        if (errorText != null) {
+            Text(
+                text = errorText,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+                color = Color(0xFFFFCDD2),
+                style = MaterialTheme.typography.bodyMedium,
             )
         }
     }

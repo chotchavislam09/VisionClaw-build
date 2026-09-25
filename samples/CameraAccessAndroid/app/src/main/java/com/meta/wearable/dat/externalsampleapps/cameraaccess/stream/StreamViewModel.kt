@@ -130,6 +130,10 @@ class StreamViewModel(
             // navigate back when state transitioned to STOPPED
             if (currentState != prevState && currentState == StreamSessionState.STOPPED) {
               stopStream()
+              // The session ended on its own; this is the one place that
+              // really does release the foreground service, since stopStream()
+              // now only drops the wake lock.
+              StreamingService.stop(getApplication())
               wearablesViewModel.navigateToDeviceSelection()
             }
           }
@@ -158,8 +162,13 @@ class StreamViewModel(
   }
 
   fun stopStream() {
-    // Stop foreground service
-    StreamingService.stop(getApplication())
+    // Release the wake lock, but do not tear the foreground service down here.
+    // Stopping the service is what ends the DAT session on this end, and this
+    // method is also how an assistant-only teardown releases its lock -- which
+    // took the glasses capture with it and left a blank screen behind a live
+    // session. Real session ends come through the STOPPED state below, which
+    // still calls the full stop.
+    StreamingService.stopWakeLockOnly(getApplication())
     wakeLockJob?.cancel()
     wakeLockJob = null
 

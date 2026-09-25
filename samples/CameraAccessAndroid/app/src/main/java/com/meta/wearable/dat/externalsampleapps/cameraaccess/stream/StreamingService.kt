@@ -35,6 +35,7 @@ class StreamingService : Service() {
     private const val CHANNEL_NAME = "Glasses streaming"
     private const val NOTIFICATION_ID = 1001
     private const val WAKELOCK_TAG = "VisionClaw::StreamingWakeLock"
+    private const val ACTION_STOP = "com.meta.wearable.dat.externalsampleapps.cameraaccess.STOP_STREAMING"
 
     fun start(context: Context) {
       val intent =
@@ -44,6 +45,24 @@ class StreamingService : Service() {
       } else {
         context.startService(intent)
       }
+    }
+
+    /**
+     * Stops the service without stopping the DAT stream that keeps it here.
+     *
+     * The two were the same call until now, and they must not be: stopping
+     * the foreground service is how the Android side releases a session, and
+     * nothing else about it is safe to lose. Sessions that end for their own
+     * reasons still call [stop], which is what actually tears everything
+     * down.
+     */
+    fun stopWakeLockOnly(context: Context) {
+      val intent =
+          Intent(context, StreamingService::class.java).apply {
+            `package` = context.packageName
+            action = ACTION_STOP
+          }
+      context.startService(intent)
     }
 
     fun stop(context: Context) {
@@ -65,6 +84,15 @@ class StreamingService : Service() {
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
     Log.d(TAG, "Service started")
+
+    // A re-arm that must not disturb the stream. Dropping the lock is the
+    // point; leaving the foreground is not, so the service stays up and the
+    // next re-arm takes a fresh lock.
+    if (intent?.action == ACTION_STOP) {
+      releaseWakeLock()
+      Log.d(TAG, "Wake lock released on request, service kept alive")
+      return START_STICKY
+    }
 
     val notification = createNotification()
 
