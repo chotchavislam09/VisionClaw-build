@@ -31,7 +31,6 @@ fun ControlsRow(
     isLiveActive: Boolean,
     modifier: Modifier = Modifier,
     onOpenSettings: (() -> Unit)? = null,
-    showLiveButton: Boolean = true,
 ) {
     Row(
         modifier = modifier
@@ -88,27 +87,25 @@ fun ControlsRow(
             )
         }
 
-        // Live toggle button. Hidden on the phone path, where it can only
-        // fail: it starts the glasses WebRTC relay, which needs a signaling
-        // server that ships as the placeholder wss://YOUR_SIGNALING_SERVER.
-        // Tapping it there produced "Unable to resolve host your_signaling_server"
-        // -- a technical dead end dressed up as a feature.
-        if (showLiveButton) {
-            Button(
-                onClick = onToggleLive,
-                modifier = Modifier.aspectRatio(1f),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = if (isLiveActive) AppColor.Red else AppColor.DeepBlue,
-                ),
-                shape = CircleShape,
-                contentPadding = PaddingValues(0.dp),
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Videocam,
-                    contentDescription = if (isLiveActive) "Stop Live" else "Start Live",
-                    tint = Color.White,
-                )
-            }
+        // Live toggle button. Always present: the owner is standing up a
+        // signaling server, and a control that vanishes until then is a
+        // control that has to be rebuilt later. While the URL is still the
+        // shipped placeholder the press is refused with a sentence instead of
+        // an attempted connection to a hostname that does not resolve.
+        Button(
+            onClick = onToggleLive,
+            modifier = Modifier.aspectRatio(1f),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = if (isLiveActive) AppColor.Red else AppColor.DeepBlue,
+            ),
+            shape = CircleShape,
+            contentPadding = PaddingValues(0.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Videocam,
+                contentDescription = if (isLiveActive) "Stop Live" else "Start Live",
+                tint = Color.White,
+            )
         }
     }
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.meta.wearable.dat.externalsampleapps.cameraaccess.settings.SettingsManager
 import org.webrtc.IceCandidate
 import org.webrtc.PeerConnection
 import org.webrtc.VideoTrack
@@ -63,6 +64,17 @@ class WebRTCSessionViewModel(application: Application) : AndroidViewModel(applic
         if (!WebRTCConfig.isConfigured) {
             _uiState.value = _uiState.value.copy(
                 errorMessage = "WebRTC signaling URL not configured."
+            )
+            return
+        }
+
+        // isConfigured only checks the wss:// prefix, and the shipped
+        // placeholder has one. Dial it and the failure surfaces as a DNS
+        // error, which reads as a server fault rather than an unset address.
+        if (SettingsManager.webrtcSignalingIsPlaceholder) {
+            _uiState.value = _uiState.value.copy(
+                errorMessage = "No signaling server set. Open Settings, then " +
+                    "Gateway settings, and enter your server's wss:// address."
             )
             return
         }

@@ -192,6 +192,17 @@ object SettingsManager {
         get() = prefs.getString("webrtcSignalingURL", null) ?: DEFAULT_SIGNALING_URL
         set(value) = prefs.edit().putString("webrtcSignalingURL", value).apply()
 
+    /**
+     * True while the signaling URL is still the placeholder the app ships with.
+     *
+     * The placeholder starts with "wss://", so WebRTCConfig.isConfigured waves
+     * it through and the client dials a hostname that does not exist -- the
+     * user sees "Unable to resolve host your_signaling_server" and reasonably
+     * reads it as a fault rather than an unfilled setting.
+     */
+    val webrtcSignalingIsPlaceholder: Boolean
+        get() = webrtcSignalingURL.startsWith("wss://YOUR_")
+
     fun resetAll() {
         prefs.edit().clear().apply()
         _captureSourceFlow.value = CaptureSource.PHONE

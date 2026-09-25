@@ -170,11 +170,6 @@ fun StreamScreen(
                     }
                 },
                 isLiveActive = webrtcUiState.isActive,
-                // The Live relay is the glasses path: it needs a signaling
-                // server, and the phone build has none (the setting still
-                // holds the shipped placeholder). On the phone the button had
-                // exactly one outcome -- an error toast.
-                showLiveButton = !isPhoneMode,
                 onOpenSettings = onOpenSettings,
                 modifier = Modifier.align(Alignment.BottomCenter),
             )
